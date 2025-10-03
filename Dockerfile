@@ -1,41 +1,39 @@
-# Use Node.js 22 slim
+# Use Node.js 22 slim image
 FROM node:22-slim
 
+# Set working directory
 WORKDIR /src
 
+# Environment variables
 ENV NODE_ENV=production
-# Mediasoup will compile workers instead of downloading
-ENV MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD=true
 
-# Install build dependencies
+# Install necessary system packages
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    build-essential \
-    python3 \
-    python3-pip \
-    ffmpeg \
-  && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        python3 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy package files
+# Copy package files first (for caching)
 COPY package*.json ./
 
-# Install deps (needs package-lock.json present!)
-RUN npm ci --only=production
+# Install npm dependencies (downloads mediasoup prebuilt workers automatically)
+RUN npm ci --only=production --silent
 
-# Copy app files
+# Copy application code
 COPY ./app ./app
 COPY ./public ./public
 
-# Rename config.template.js → config.js
+# Rename config file
 RUN cp ./app/src/config.template.js ./app/src/config.js
 
-# Clean up build deps to shrink image
-RUN apt-get purge -y --auto-remove python3-pip build-essential \
-  && npm cache clean --force \
-  && rm -rf /tmp/* /var/tmp/* /usr/share/doc/*
+# Clean up cache and unnecessary files
+RUN npm cache clean --force \
+    && rm -rf /tmp/* /var/tmp/* /usr/share/doc/*
 
-# Expose the port Render will set
+# Render sets $PORT automatically — ensure app listens on it
 ENV PORT=10000
 EXPOSE 10000
 
+# Start the app
 CMD ["npm", "start"]
