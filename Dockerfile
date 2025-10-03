@@ -1,39 +1,41 @@
-# Use Node.js 22 LTS slim image as base
+# Use Node.js 22 slim
 FROM node:22-slim
 
-# Set working directory
 WORKDIR /src
 
-# Set environment variable to skip downloading prebuilt workers
-ENV MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD="true"
-ENV NODE_ENV="production"
+ENV NODE_ENV=production
+# Mediasoup will compile workers instead of downloading
+ENV MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD=true
 
-# Install necessary system packages and dependencies
+# Install build dependencies
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        python3 \
-        python3-pip \
-        ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Rename config.template.js to config.js
-COPY ./app/src/config.template.js ./app/src/config.js
-
-# Copy package*.json and install npm dependencies
-COPY package*.json ./
-RUN npm ci --only=production --silent
-
-# Cleanup unnecessary packages and files
-RUN apt-get purge -y --auto-remove \
-    python3-pip \
+  && apt-get install -y --no-install-recommends \
     build-essential \
-    && npm cache clean --force \
-    && rm -rf /tmp/* /var/tmp/* /usr/share/doc/*
+    python3 \
+    python3-pip \
+    ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy the application code
-COPY app app
-COPY public public
+# Copy package files
+COPY package*.json ./
 
-# Set default command to start the application
+# Install deps (needs package-lock.json present!)
+RUN npm ci --only=production
+
+# Copy app files
+COPY ./app ./app
+COPY ./public ./public
+
+# Rename config.template.js → config.js
+RUN cp ./app/src/config.template.js ./app/src/config.js
+
+# Clean up build deps to shrink image
+RUN apt-get purge -y --auto-remove python3-pip build-essential \
+  && npm cache clean --force \
+  && rm -rf /tmp/* /var/tmp/* /usr/share/doc/*
+
+# Expose the port Render will set
+ENV PORT=10000
+EXPOSE 10000
+
 CMD ["npm", "start"]
